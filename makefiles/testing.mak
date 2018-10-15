@@ -1,9 +1,9 @@
 # -*- makefile -*-
-.PHONY: check units fuzz noise tmain tinst clean-units clean-tmain clean-gcov run-gcov codecheck cppcheck dicts cspell
+.PHONY: check units fuzz noise tmain tinst clean-units clean-tmain clean-gcov run-gcov codecheck cppcheck dicts cspell verify-units-inputs clean-verify-units-inputs
 
 check: tmain units
 
-clean-local: clean-units clean-tmain
+clean-local: clean-units clean-tmain clean-verify-units-inputs
 
 CTAGS_TEST = ./ctags$(EXEEXT)
 READ_TEST = ./readtags$(EXEEXT)
@@ -87,6 +87,58 @@ slap: $(CTAGS_TEST)
 		$${VALGRIND} --run-shrink \
 		--with-timeout=$(TIMEOUT)"; \
 	$(SHELL) $${c} $(srcdir)/Units
+
+TEST_DIRS =
+
+# bmake does not support the metaprogramming similar to gnu make.
+if !USING_BMAKE
+
+# TODO: A workaround for automake errorrs.
+# TODO: Explain more why this is necessary
+set = $(eval $(1) = $(2))
+
+# Parameters:
+# $(1): Language Name. For example: PUPPET
+# $(2): Extension. For example: .pp
+# $(3): Directory Name. For example: parser-puppetManifest.r
+# $(4): Command: For example: puppet apply --noop $$$$<  1>/dev/null
+define VERIFY_GIVEN_UNITS_TEST_DIR
+
+# Find the test directories where ctags is expected to succeed. Only tests with
+# an expected.tags file present are required to have valid input.
+$$(call set,$(1)_TEST_DIRS,$$(foreach path, \
+    $$(shell find $$(srcdir)/Units/$(3) -name expected.tags), \
+    $$(shell dirname $$(path))) )
+$$(call set,VERIFY_$(1)_TEST_DIRS_TARGETS,$$($(1)_TEST_DIRS:%=%/.input$(2).verified))
+
+# Add the dependency to the verify-units-inputs phony target for the current language.
+verify-units-inputs: $$(VERIFY_$(1)_TEST_DIRS_TARGETS)
+
+# A inner define to verify each file of the specified language.
+define VERIFY_ONE_$(1)_TEST_DIR
+$$(1)/.input$(2).verified: $$(1)/input$(2)
+	$(4) && \
+	touch $$$$@
+endef
+
+# Generate the inner define
+$$(foreach $(1)_test_dir,$$($(1)_TEST_DIRS),$$(eval $$(call VERIFY_ONE_$(1)_TEST_DIR,$$($(1)_test_dir))))
+
+endef # define VERIFY_GIVEN_UNITS_TEST_DIR
+
+# Generate unit test input.xx file verifiers for each language.
+$(eval $(call VERIFY_GIVEN_UNITS_TEST_DIR,PUPPET,.pp,parser-puppetManifest.r,puppet apply --noop $$$$< 1>/dev/null))
+$(eval $(call VERIFY_GIVEN_UNITS_TEST_DIR,JSON,.json,simple-json.d,jq '.' $$$$<  1>/dev/null))
+
+
+#
+#  Removes the empty target files of the verify-units-inputs target
+#
+clean-verify-units-inputs:
+	find Units -path "*/.input.*.verified" | xargs rm -f
+
+
+endif  # if !USING_BMAKE
 
 #
 # UNITS Target
