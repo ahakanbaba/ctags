@@ -112,7 +112,8 @@ $$(call set,$(1)_TEST_DIRS,$$(foreach path, \
 $$(call set,VERIFY_$(1)_TEST_DIRS_TARGETS,$$($(1)_TEST_DIRS:%=%/.input$(2).verified))
 
 # Add the dependency to the verify-units-inputs phony target for the current language.
-verify-units-inputs: $$(VERIFY_$(1)_TEST_DIRS_TARGETS)
+verify-units-inputs-$(1): $$(VERIFY_$(1)_TEST_DIRS_TARGETS)
+verify-units-inputs: verify-units-inputs-$(1)
 
 # A inner define to verify each file of the specified language.
 define VERIFY_ONE_$(1)_TEST_DIR
@@ -129,6 +130,7 @@ endef # define VERIFY_GIVEN_UNITS_TEST_DIR
 # Generate unit test input.xx file verifiers for each language.
 $(eval $(call VERIFY_GIVEN_UNITS_TEST_DIR,PUPPET,.pp,parser-puppetManifest.r,puppet apply --noop $$$$< 1>/dev/null))
 $(eval $(call VERIFY_GIVEN_UNITS_TEST_DIR,JSON,.json,simple-json.d,jq '.' $$$$<  1>/dev/null))
+$(eval $(call VERIFY_GIVEN_UNITS_TEST_DIR,JAVA,.java,parser-java.r,javac  $$$$<  1>/dev/null))
 
 
 #
